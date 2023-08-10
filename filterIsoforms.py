@@ -62,7 +62,9 @@ downstream_buffer = int(args['downstream_buffer'])
 multi_exon_only = int(args['multi_exon_only'])
 MandoPath=args['mandopath']
 
-minimap2, emtrey = 'minimap2', 'emtrey'
+minimap2 = MandoPath+'minimap2/minimap2'
+emtrey = MandoPath+'/emtrey.py'
+
 
 out2 = open(path + '/Isoforms.filtered.fasta', 'w')
 out3 = open(path + '/Isoforms.filtered.clean.psl', 'w')
@@ -484,7 +486,7 @@ def main(infile):
     clean_psl_file = path + '/Isoforms.aligned.out.clean.psl'
     os.system('%s -G 400k -uf --secondary=no -ax splice:hq -t %s %s %s > %s ' % (minimap2, minimap2_threads, genome, processed_isoforms, sam_file))
     filter_sam(sam_file,filtered_sam_file)
-    os.system('%s -i %s > %s ' % (emtrey, filtered_sam_file, psl_file))
+    os.system('python3 %s -i %s -o %s -t %s' % (emtrey, filtered_sam_file, psl_file,minimap2_threads))
     clean_psl(psl_file, clean_psl_file,False)
     print('\tcollecting chromosomes')
     chromosomes = collect_chromosomes(clean_psl_file)
