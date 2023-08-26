@@ -59,7 +59,7 @@ def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start
     peak_areas={}
     histo_left_bases, histo_right_bases, histo_cov,csDict = SpliceDefineConsensus.collect_reads(infile, chrom)
     if verbose:
-        print(f'\t\tprocessing locus {chrom} {start} {end} covering {end-start:,} genomic bases and {len(csDict):,} sequencing reads' % (chrom,start,end)+' '*20)
+        print(f'\t\tprocessing locus {chrom} {start} {end} covering {end-start:,} genomic bases and {len(csDict):,} sequencing reads',' '*20)
 #    else:
 #        print(f'\t\tprocessing locus {chrom} {start} {end} covering {end-start:,} genomic bases and {len(csDict):,} sequencing reads' % (chrom,start,end)+' '*20, end='\r')
     peak_areas[chrom] = {}
@@ -82,11 +82,11 @@ def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start
     spliceDict={}
     spliceDict[chrom]={}
     for toWrite in [toWrite_A_l,toWrite_A_r,toWrite_N_l,toWrite_N_r]:
-       for chrom,start,end,type1,side,prop in toWrite:
+       for sChrom,sStart,sEnd,type1,side,prop in toWrite:
             peakCounter[side]+=1
             peaks=str(peakCounter[side])
-            splice_left = int(start)
-            splice_right = int(end)
+            splice_left = int(sStart)
+            splice_right = int(sEnd)
             for base in np.arange(splice_left, splice_right + 1):
                 spliceDict[chrom][base] = type1 + side + peaks
 
@@ -98,13 +98,18 @@ def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start
         print(f'\t\t\tfinding TSS and polyA sites for splice junctions chains for locus {chrom} {start} {end}')
     seqDict=SpliceDefineConsensus.define_start_end_sites(start_end_dict, start_end_dict_mono,upstream_buffer,downstream_buffer,minimum_read_count)
     IsoData={}
+    isoLength=f'{len(seqDict):,}'
     if verbose:
-        print(f'\t\t\tcreating consensus sequences for {len(seqDict):,} putative, unfiltered isoforms for locus {chrom} {start} {end}')
+        print(f'\t\t\tcreating consensus sequences for {isoLength} putative, unfiltered isoforms for locus {chrom} {start} {end}')
+    isoCounter=0
     for isoform,reads in seqDict.items():
         consensus,names=SpliceDefineConsensus.determine_consensus(reads,out_tmp+'/'+root,abpoa)
         IsoData[isoform]=[consensus,names]
+        isoCounter+=1
+        if verbose:
+            print(f'\t\t\tfinished consensus {isoCounter:,} of {isoLength} consensuses',' '*20,end='\r')
     if verbose:
-        print(f'\t\t\tfinished processing of locus {chrom} {start} {end}')
+        print(f'\n\t\t\tfinished processing of locus {chrom} {start} {end}',' '*20)
 
 
     return IsoData
@@ -168,27 +173,19 @@ def main():
         if previous==finished_roots:
             delay=False
         previous=finished_roots
-        print(f'\t\tfinished {finished_roots} of {total_roots} loci',' '*30)
+        print(f'\t\tfinished {finished_roots} of {total_roots} loci',' '*30,end='\r')
 
 
-    print(f'\n\t{total_roots-finisihed_roots} loci took too long to complete\n\tterminating multi-threading pool',' '*30)
+    print(f'\n\t{total_roots-finished_roots} loci took too long to complete\n\tterminating multi-threading pool',' '*30)
     pool.terminate()
     pool.join()
 
-    counter=0
-    print('\twriting isoform sequences to file for loci that completed')
+    completedResults={}
+    print('\tstoring isoform sequences to file for loci that completed')
     unfinished_roots=set()
-    for root in roots:
-        chrom,start,end=root.split('~')
+    for root in results:
         if results[root].ready():
-            IsoData = results[root].get()
-            for isoform in IsoData:
-                counter+=1
-                consensus,names = IsoData[isoform]
-                nameString='Isoform'+str(counter)+'_'+str(len(names))
-                out.write('>%s\n%s\n' % (nameString,consensus))
-                for name in names:
-                    out_r2i.write('%s\t%s\n' %(name,nameString))
+            completedResults[root] = results[root].get()
         else:
             unfinished_roots.add(root)
 
@@ -196,16 +193,21 @@ def main():
     results={}
     unfinished_roots=sorted(list(unfinished_roots),key=lambda x: (x.split('~')[0],int(x.split('~')[1])))
     for root in unfinished_roots:
-        print('processing',root, 'single-threaded')
+        print('\tprocessing',root, 'single-threaded')
         chrom,start,end=root.split('~')
         start=int(start)
         end=int(end)
         left_bounds_sub,right_bounds_sub=SpliceDefineConsensus.prepare_locus(chrom,start,end,left_bounds,right_bounds)
         results[root]=process_locus(out_tmp,root,chrom,left_bounds_sub[chrom], right_bounds_sub[chrom],start,end,splice_site_width,minimum_read_count,junctions,cutoff,abpoa,True)
-    print('\twriting isoform sequences to file for single-threaded loci')
-    for root in unfinished_roots:
+
+    for root in results:
+        completedResults[root] = results[root]
+
+    print('\twriting isoform sequences to file')
+    counter=0
+    for root in roots:
         chrom,start,end=root.split('~')
-        IsoData = results[root]
+        IsoData = completedResults[root]
         for isoform in IsoData:
             counter+=1
             consensus,names = IsoData[isoform]
@@ -213,7 +215,6 @@ def main():
             out.write('>%s\n%s\n' % (nameString,consensus))
             for name in names:
                 out_r2i.write('%s\t%s\n' %(name,nameString))
-
 
 
 
