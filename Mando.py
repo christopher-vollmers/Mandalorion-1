@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(PATH))
 import SpliceDefineConsensus
 
 
-VERSION = "v4.2.0 - Isoforms are a pathway to many abilities some consider to be unnatural."
+VERSION = "v4.3.0 - That's no moon. It's an isoform"
 
 parser = argparse.ArgumentParser(usage='\n\nRunning with default parameters:\n\npython3 Mando.py -p . -g gencodeV29.gtf -G hg38.fasta -f Consensus_reads_noAdapters_noPolyA_5->3.fofn\n')
 
