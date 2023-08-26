@@ -13,6 +13,26 @@ import gzip
 poa_aligner = poa.msa_aligner()
 
 
+def prepare_locus(chrom,start,end,left_bounds,right_bounds):
+    if chrom not in left_bounds:
+        left_bounds[chrom] = {'5': [], '3': []}
+    if chrom not in right_bounds:
+        right_bounds[chrom] = {'5': [], '3': []}
+
+    left_bounds_sub = {}
+    right_bounds_sub = {}
+    left_bounds_sub[chrom] =  {'5': [], '3': []}
+    right_bounds_sub[chrom] = {'5': [], '3': []}
+    for side in ['5','3']:
+        for pos in left_bounds[chrom][side]:
+            if start<pos<end:
+                left_bounds_sub[chrom][side].append(pos)
+        for pos in right_bounds[chrom][side]:
+            if start<pos<end:
+                 right_bounds_sub[chrom][side].append(pos)
+    return left_bounds_sub,right_bounds_sub
+
+
 
 def clean_psl(psl_file, clean_psl_file,primary):
 
