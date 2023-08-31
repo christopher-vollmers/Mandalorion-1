@@ -3,7 +3,7 @@
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](http://perso.crans.org/besson/LICENSE.html)
 
 
-v4.2.0 - Isoforms are a pathway to many abilities some consider to be unnatural.
+v4.3.1 - That's no moon. It's an isoform.
 
 Takes R2C2/C3POa and/or PacBio/ccs/lima data and defines high confidence isoform consensus sequences and alignments.
 You can mix and match R2C2/PacBio reads and fasta/fastq files (quality scores are ignored).
