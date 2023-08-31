@@ -8,10 +8,8 @@ import re
 import os
 import numpy as np
 import mappy as mp
-import pyabpoa as poa
 import gzip
-poa_aligner = poa.msa_aligner()
-
+import time
 
 def prepare_locus(chrom,start,end,left_bounds,right_bounds):
     if chrom not in left_bounds:
@@ -299,58 +297,72 @@ def find_peaks(density_dict, reverse, cutoff, histo_cov, side, peak_areas, chrom
 
 
 def collect_reads(reads, target_chrom):
-    histo_cov, histo_left_bases, histo_right_bases = {}, {}, {}
+    histo_cov, histo_left_bases, histo_right_bases, subsample = {}, {}, {}, 100000
     histo_cov[target_chrom] = {}
     histo_left_bases[target_chrom] = {}
     histo_right_bases[target_chrom] = {}
     csDict={}
+    lineCounter=0
     for line in open(reads):
-        a = line.strip().split('\t')
-        chrom = a[13]
-        if chrom==target_chrom:
-            name = a[9]
-            dirn = a[8]
-            length = int(a[10])
-            begin, span = int(a[15]), int(a[16])
-            blocksizes = a[18].split(',')[:-1]
-            blockstarts = a[20].split(',')[:-1]
-            accuracy = float(a[21])
-            cs=a[22]
-            csDict[name]=(cs,begin)
-            cov_set = set()
-            low_bounds, up_bounds = [], []
-            aligned_bases = 0
-            for x in range(0, len(blocksizes)):
-                blockstart = int(blockstarts[x])
-                blocksize = int(blocksizes[x])
-                aligned_bases += blocksize
-                blockend = blockstart + blocksize
-                for y in range(0, blocksize, 10):
-                    rounded = myround(blockstart + y)
-                    cov_set.add(rounded)
-                for yy in range(y, blocksize):
-                    rounded = myround(blockstart + yy)
-                    cov_set.add(rounded)
-                if blockstart != begin:
-                    up_bounds.append(blockstart)
-                if blockend != span:
-                    low_bounds.append(blockend)
+        lineCounter+=1
 
-            for rounded in cov_set:
-                if rounded not in histo_cov[chrom]:
-                    histo_cov[chrom][rounded] = 0
-                histo_cov[chrom][rounded] += 1
 
-            if accuracy<0.9:
-                continue
-            for low_bound in low_bounds:
-                if low_bound not in histo_left_bases[chrom]:
-                    histo_left_bases[chrom][low_bound] = []
-                histo_left_bases[chrom][low_bound].append([name, begin, span, cov_set, dirn,accuracy,round(aligned_bases,-2)])
-            for up_bound in up_bounds:
-                if up_bound not in histo_right_bases[chrom]:
-                    histo_right_bases[chrom][up_bound] = []
-                histo_right_bases[chrom][up_bound].append([name, begin, span, cov_set, dirn,accuracy,round(aligned_bases,-2)])
+    indexes = np.random.choice(range(0, lineCounter, 1),
+                               size=min(lineCounter,subsample),
+                               replace=False)
+
+    indexes=set(indexes)
+
+    lineCounter=-1
+    for line in open(reads):
+        lineCounter+=1
+        if lineCounter in indexes:
+            a = line.strip().split('\t')
+            chrom = a[13]
+            if chrom==target_chrom:
+                name = a[9]
+                dirn = a[8]
+                length = int(a[10])
+                begin, span = int(a[15]), int(a[16])
+                blocksizes = a[18].split(',')[:-1]
+                blockstarts = a[20].split(',')[:-1]
+                accuracy = float(a[21])
+                cs=a[22]
+                csDict[name]=(cs,begin)
+                cov_set = set()
+                low_bounds, up_bounds = [], []
+                aligned_bases = 0
+                for x in range(0, len(blocksizes)):
+                    blockstart = int(blockstarts[x])
+                    blocksize = int(blocksizes[x])
+                    aligned_bases += blocksize
+                    blockend = blockstart + blocksize
+                    for y in range(0, blocksize, 10):
+                        rounded = myround(blockstart + y)
+                        cov_set.add(rounded)
+                    for yy in range(y, blocksize):
+                        rounded = myround(blockstart + yy)
+                        cov_set.add(rounded)
+                    if blockstart != begin:
+                        up_bounds.append(blockstart)
+                    if blockend != span:
+                        low_bounds.append(blockend)
+
+                for rounded in cov_set:
+                    if rounded not in histo_cov[chrom]:
+                        histo_cov[chrom][rounded] = 0
+                    histo_cov[chrom][rounded] += 1
+
+                if accuracy<0.9:
+                    continue
+                for low_bound in low_bounds:
+                    if low_bound not in histo_left_bases[chrom]:
+                        histo_left_bases[chrom][low_bound] = []
+                    histo_left_bases[chrom][low_bound].append([name, begin, span, cov_set, dirn,accuracy,round(aligned_bases,-2)])
+                for up_bound in up_bounds:
+                    if up_bound not in histo_right_bases[chrom]:
+                        histo_right_bases[chrom][up_bound] = []
+                    histo_right_bases[chrom][up_bound].append([name, begin, span, cov_set, dirn,accuracy,round(aligned_bases,-2)])
     return histo_left_bases, histo_right_bases, histo_cov,csDict
 
 
@@ -461,6 +473,103 @@ def make_genome_bins(bounds, side, chrom, peak_areas,splice_site_width):
     return peak_areas,toWrite
 
 
+def prune_locus(previous_start,previous_end,reads,minCount):
+    minCount=int(minCount)
+    coords=[]
+    for line in reads:
+        a=line.strip().split('\t')
+        chrom=a[13]
+        start=int(a[15])
+        end=int(a[16])
+        name=a[9]
+        coords.append((start,1,line))
+        coords.append((end,-1,line))
+    coords=sorted(coords)
+    coverage=0
+
+    lines=[]
+    locus=False
+    loci=[]
+    for coord in coords:
+         loc,value,line=coord[0],coord[1],coord[2]
+         coverage+=value
+         if locus:
+             if coverage<minCount:
+                 locusEnd=loc
+                 root=f'{chrom}~{locusStart}~{locusEnd}'
+                 rootReads=lines
+                 loci.append((root,rootReads))
+                 lines=[]
+                 locus=False
+         else:
+             if coverage >= minCount:
+                 locus=True
+                 locusStart=loc
+         if value == 1:
+             lines.append(line)
+    return loci
+
+
+def get_loci(infile,out_tmp,minCount):
+    chrom_list=set()
+    outDict={}
+    reads=[]
+    new=False
+    previous_chrom=''
+    previous_start=0
+    previous_end=0
+    roots=set()
+    total_psl=0
+    print('\t\tparsing psl and splitting into loci')
+    for line in open(infile):
+        a=line.strip().split('\t')
+        chrom=a[13]
+        chrom_list.add(chrom)
+        start=int(a[15])
+        end=int(a[16])
+        if chrom!=previous_chrom or start>previous_end:
+            new=True
+
+        if not new:
+            previous_end=max(end,previous_end)
+            reads.append(line)
+        else:
+            if reads:
+                root=previous_chrom+'~'+str(previous_start)+'~'+str(previous_end)
+                loci=prune_locus(previous_start,previous_end,reads,minCount)
+                print(f'\t\tPreliminary locus {root} with {len(reads)} reads split into {len(loci)} final loci',' '*20,end='\r')
+                for root,root_reads in loci:
+#                    print(f'\t\t\t{root} {len(root_reads)}')
+                    fh=open(out_tmp+'/'+root+'.psl', 'w')
+                    roots.add(root)
+
+                    for read in root_reads:
+                        fh.write(read)
+                        total_psl+=1
+                        name=read.strip().split('\t')[9]
+                        outDict[name]=root
+                    fh.close()
+                reads=[]
+            reads.append(line)   ### bug in v4.0.0. Left the first read in each locus unused
+            previous_chrom=chrom
+            previous_end=end
+            previous_start=start
+            new=False
+    if reads:
+        loci=prune_locus(previous_start,previous_end,reads,minCount)
+        for root,root_reads in loci:
+            fh=open(out_tmp+'/'+root+'.psl', 'w')
+            roots.add(root)
+            for line in reads:
+                total_psl+=1
+                fh.write(line)
+                name=line.strip().split('\t')[9]
+                outDict[name]=root
+            fh.close()
+
+    print(f'\t\tsplit {total_psl} psl entries into {len(roots)} loci',' '*20)
+
+
 
 def get_chromosomes(infile,out_tmp,fastaList):
     chrom_list=set()
@@ -489,6 +598,7 @@ def get_chromosomes(infile,out_tmp,fastaList):
             if reads:
                 root=previous_chrom+'~'+str(previous_start)+'~'+str(previous_end)
                 print('\t\tdefining locus',(' ').join(root.split('~')),' '*20,end='\r')
+
                 fh=open(out_tmp+'/'+root+'.psl', 'w')
                 roots.add(root)
 
@@ -595,7 +705,6 @@ def find_ends(starts, ends, identity, count_dict, upstream_buffer,downstream_buf
         end_count[position] += 1
 
     show=False
-
     for position in sorted(starts):
         if position - upstream_buffer not in start_peaks:
             window_count = 0
@@ -848,7 +957,6 @@ def define_start_end_sites(start_end_dict, start_end_dict_mono,upstream_buffer,d
             starts.append(int(position[0]))
             ends.append(int(position[1]))
 
-
         start_dict, end_dict, count_dict = find_ends(starts, ends, identity, count_dict,upstream_buffer,downstream_buffer,minimum_feature_count)
         matched_positions = []
         left_extras[identity], right_extras[identity] = {}, {}
@@ -904,16 +1012,20 @@ def determine_consensus(reads,root,abpoa):
         fasta_reads.append((read, seq))
         names.append(read)
 
-    indeces = np.random.choice(np.arange(0, len(fasta_reads)),
-                                   min(len(fasta_reads), 100), replace=False)
+    length_fasta_reads=len(fasta_reads)
+
+    indeces = np.random.choice(np.arange(0, length_fasta_reads),
+                                   min(length_fasta_reads, 100), replace=False)
+
+    indeces=set(indeces)
     subsample_fasta_reads = []
+    lineCounter=-1
     for index in indeces:
         subsample_fasta_reads.append(fasta_reads[index])
+
     first = subsample_fasta_reads[0][1]
     sequences=[]
     seq_lengths=[]
-
-
 
     mm_align = mp.Aligner(seq=first, preset='map-ont')
 

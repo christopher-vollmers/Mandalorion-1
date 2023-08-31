@@ -254,7 +254,7 @@ if 'P' in Modules:
         print('\treading and splitting psl file into loci')
         os.system('rm -r %s/%s' % (temp_path,'tmp_SS/'))
         os.system('mkdir %s/%s' % (temp_path,'tmp_SS/'))
-        SpliceDefineConsensus.get_chromosomes(clean_sorted_psl_file,temp_path+'/tmp_SS',fastaList)
+        SpliceDefineConsensus.get_loci(clean_sorted_psl_file,temp_path+'/tmp_SS',minimum_reads)
     else:
         print('\tno or empty SAM file was provided. File conversions and parsing not performed')
 

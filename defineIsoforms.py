@@ -57,11 +57,9 @@ abpoa = args.abpoa
 def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start,end,splice_site_width,minimum_read_count,junctions,cutoff,abpoa,verbose):
     infile=out_tmp+'/'+root+'.psl'
     peak_areas={}
-    histo_left_bases, histo_right_bases, histo_cov,csDict = SpliceDefineConsensus.collect_reads(infile, chrom)
+    histo_left_bases, histo_right_bases, histo_cov, csDict = SpliceDefineConsensus.collect_reads(infile, chrom)
     if verbose:
         print(f'\t\tprocessing locus {chrom} {start} {end} covering {end-start:,} genomic bases and {len(csDict):,} sequencing reads',' '*20)
-#    else:
-#        print(f'\t\tprocessing locus {chrom} {start} {end} covering {end-start:,} genomic bases and {len(csDict):,} sequencing reads' % (chrom,start,end)+' '*20, end='\r')
     peak_areas[chrom] = {}
     peak_areas[chrom]['l'] = {}
     peak_areas[chrom]['r'] = {}
@@ -73,6 +71,7 @@ def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start
     peak_areas, toWrite_A_r = SpliceDefineConsensus.make_genome_bins(right_bounds_chrom, 'r', chrom, peak_areas,splice_site_width)
     if verbose:
         print(f'\t\t\tfinding high-confidence unannotated splice sites in locus {chrom} {start} {end}')
+
     peak_areas, toWrite_N_l = SpliceDefineConsensus.find_peaks(histo_left_bases[chrom], True, cutoff, histo_cov, 'l', peak_areas, chrom,csDict,start,end,splice_site_width,minimum_read_count,junctions)
     peak_areas, toWrite_N_r = SpliceDefineConsensus.find_peaks(histo_right_bases[chrom], False, cutoff, histo_cov, 'r', peak_areas, chrom,csDict,start,end,splice_site_width,minimum_read_count,junctions)
 
@@ -88,15 +87,19 @@ def process_locus(out_tmp,root,chrom,left_bounds_chrom, right_bounds_chrom,start
             splice_left = int(sStart)
             splice_right = int(sEnd)
             for base in np.arange(splice_left, splice_right + 1):
-                spliceDict[chrom][base] = type1 + side + peaks
+                spliceDict[sChrom][base] = type1 + side + peaks
+
+    del histo_left_bases, histo_right_bases, histo_cov, csDict
 
     if verbose:
         print(f'\t\t\tsorting read alignments into splice junctions for locus {chrom} {start} {end}')
     start_end_dict, start_end_dict_mono = SpliceDefineConsensus.sort_reads_into_splice_junctions(spliceDict, infile)
 
     if verbose:
-        print(f'\t\t\tfinding TSS and polyA sites for splice junctions chains for locus {chrom} {start} {end}')
+        print(f'\t\t\tfinding TSS and polyA sites for {len(start_end_dict):,} multi-exon and {len(start_end_dict_mono)} mono-exon splice junctions chains for locus {chrom} {start} {end}')
     seqDict=SpliceDefineConsensus.define_start_end_sites(start_end_dict, start_end_dict_mono,upstream_buffer,downstream_buffer,minimum_read_count)
+    del start_end_dict, start_end_dict_mono
+
     IsoData={}
     isoLength=f'{len(seqDict):,}'
     if verbose:
@@ -163,17 +166,20 @@ def main():
     previous=0
     delay=True
     while delay:
-        time.sleep(60)
+        time.sleep(1200)
         total_roots=0
         finished_roots=0
+        reCounter=0
         for root in results:
             total_roots+=1
             if results[root].ready():
                 finished_roots+=1
+                for isoform in results[root].get():
+                    reCounter+=1
         if previous==finished_roots:
             delay=False
         previous=finished_roots
-        print(f'\t\tfinished {finished_roots} of {total_roots} loci',' '*30,end='\r')
+        print(f'\t\tfinished {finished_roots} of {total_roots} loci totalling {reCounter} putative, unfiltered isoforms',' '*30,end='\r')
 
 
     print(f'\n\t{total_roots-finished_roots} loci took too long to complete\n\tterminating multi-threading pool',' '*30)
@@ -181,7 +187,7 @@ def main():
     pool.join()
 
     completedResults={}
-    print('\tstoring isoform sequences to file for loci that completed')
+    print('\tstoring isoform sequences for loci that completed')
     unfinished_roots=set()
     for root in results:
         if results[root].ready():
