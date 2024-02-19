@@ -228,4 +228,4 @@ Junctions.rpm: Normalized expression values for each supplied fasta file associa
 These are the scripts used to do haplotype phasing and HLA analysis as well as preparing reads for Mandalorion and parsing output to fit the LRGASP consortium requirements.
 There is also a script to plot a genome browser shot as shown here. 
 
-![Final_assignment](https://github.com/christopher-vollmers/Mandalorion/assets/28308271/6bc74804-57e1-4e46-8295-08a39f2342ee)
+![test](https://github.com/christopher-vollmers/Mandalorion/assets/28308271/b44b972a-a9b9-4040-8f04-337647e59ada)
