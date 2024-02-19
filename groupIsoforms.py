@@ -11,6 +11,7 @@ def argParser():
     )
 
     parser.add_argument('-i', '--infile', type=str, action='store')
+    parser.add_argument('-t', '--gtffile', type=str, action='store')
     parser.add_argument('-o', '--outfile', type=str, action='store')
     parser.add_argument('-g', '--genome_annotation', type=str, action='store')
 
@@ -20,6 +21,7 @@ def argParser():
 
 args = argParser()
 infile = args['infile']
+gtffile = args['gtffile']
 outfile = args['outfile']
 genome_annotation = args['genome_annotation']
 
@@ -37,7 +39,7 @@ def read_annotation(genome_annotation):
 
     else:
         if genome_annotation.endswith('.gtf.gz'):
-            print('\t\tgtf file ends on .gz and will be treated as gzipped')
+            print('\t\t\tgtf file ends on .gz and will be treated as gzipped')
             input=gzip.open(genome_annotation,'rt')
         elif genome_annotation.endswith('.gtf'):
             input=open(genome_annotation,'r')
@@ -61,12 +63,12 @@ def read_annotation(genome_annotation):
 
 
         for direction in ['+','-']:
-            print('\t\treading genes on',direction,'strand')
+            print('\t\t\treading genes on',direction,'strand')
             total=len(geneDict[direction])
             current=0
             for gene,coords in geneDict[direction].items():
                 current+=1
-                print('\t\t'+str(current),'of',total,str(round((current/total)*100,2))+'%'+' '*40,end='\r')
+                print('\t\t\t'+str(current),'of',total,str(round((current/total)*100,2))+'%'+' '*40,end='\r')
                 chromosome=coords[0]
                 for exon in coords[1]:
                     start=exon[0]
@@ -90,9 +92,10 @@ def group_isoforms(infile,coordDict):
     previous_end=0
     roots=set()
     locus=0
+    i2g={}
     covered=set()
     for direction in ['+','-']:
-        print('\t\tgrouping isoforms  on',direction,'strand')
+        print('\t\t\tgrouping isoforms  on',direction,'strand')
         outDict={}
         isoforms=[]
         new=False
@@ -100,7 +103,6 @@ def group_isoforms(infile,coordDict):
         previous_start=0
         previous_end=0
         roots=set()
-        locus=0
         isoform_count=0
         for line in open(infile):
             a=line.strip().split('\t')
@@ -114,7 +116,7 @@ def group_isoforms(infile,coordDict):
             isodirection=a[8]
             if direction==isodirection:
                 current+=1
-                print('\t\t'+str(current),'of',isoform_count,str(round((current/isoform_count)*100,2))+'%'+' '*40,end='\r')
+                print('\t\t\t'+str(current),'of',isoform_count,str(round((current/isoform_count)*100,2))+'%'+' '*40,end='\r')
 
                 chrom=a[13]
 
@@ -132,7 +134,7 @@ def group_isoforms(infile,coordDict):
                         isoforms.append(line)
                 if new:
                     if isoforms:
-                        locus = match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus)
+                        locus,i2g = match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus,i2g)
                     isoforms=[]
                     isoforms.append(line)
                     previous_chrom=chrom
@@ -140,10 +142,11 @@ def group_isoforms(infile,coordDict):
                     previous_start=start
                     new=False
         if isoforms:
-            locus = match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus)
+            locus,i2g = match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus,i2g)
         print('\n')
+    return i2g
 
-def match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus):
+def match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction,locus,i2g):
     genes={}
     covered=set()
     for line in isoforms:
@@ -184,11 +187,42 @@ def match_isoforms(isoforms,previous_chrom,previous_start,previous_end,direction
         GeneOverlaps=''
     for line in isoforms:
         name=line.strip().split('\t')[9]
+        if best:
+            i2g[name]=best
+        else:
+            i2g[name]=locus
         out.write(name+'\t'+LocusName+'\t'+previous_chrom+'\t'+str(previous_start)+'\t'+str(previous_end)+'\t'+best+'\t'+GeneOverlaps+'\n')
-    return locus
+    return locus,i2g
+
+def psl_to_gtf(psl_file,gtf_file,i2g):
+    '''
+    converts a psl file to a gtf file. It also adjusts the start position by +1 to but leave the end position of features alone. \
+    This way it accomodates format definitions and coordinate systems.
+    '''
+    out=[]
+    doneDict=set()
+    for line in open(psl_file):
+        a = line.strip().split('\t')
+        direction, name, chromosome, start, end=a[8], a[9], a[13], int(a[15]), int(a[16])
+        blocksizes, blockstarts, readstarts = a[18].split(',')[:-1], a[20].split(',')[:-1],a[19].split(',')[:-1]
+        gene=i2g[name]
+        out_tmp=[]
+        out_tmp.append('%s\tMandalorion\ttranscript\t%s\t%s\t.\t%s\t.\ttranscript_id "%s"; gene_id "%s"; gene_name "%s"\n' % (chromosome,int(start)+1,end,direction,name,gene,gene))
+        for index in numpy.arange(0,len(blocksizes),1):
+            blockstart=blockstarts[index]
+            blockend=str(int(blockstarts[index])+int(blocksizes[index]))
+            out_tmp.append('%s\tMandalorion\texon\t%s\t%s\t.\t%s\t.\ttranscript_id "%s"; gene_id "%s"; gene_name "%s"\n' % (chromosome,int(blockstart)+1,blockend,direction,name,gene,gene))
+        out.append(out_tmp)
+    gtf_handle=open(gtf_file,'w')
+    for transcript in out:
+        for feature in transcript:
+            gtf_handle.write(feature)
+    gtf_handle.close()
 
 
 print('\t\tparsing genome annotation')
 coordDict=read_annotation(genome_annotation)
 print('\t\tprocessing isoforms')
-group_isoforms(infile,coordDict)
+i2g=group_isoforms(infile,coordDict)
+print('\tconverting psl to gtf')
+psl_to_gtf(infile,gtffile,i2g)

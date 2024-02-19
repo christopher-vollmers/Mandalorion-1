@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(PATH))
 import SpliceDefineConsensus
 
 
-VERSION = "v4.3.0 - That's no moon. It's an isoform"
+VERSION = "v4.5.0 - Somehow Isoform Returned"
 
 parser = argparse.ArgumentParser(usage='\n\nRunning with default parameters:\n\npython3 Mando.py -p . -g gencodeV29.gtf -G hg38.fasta -f Consensus_reads_noAdapters_noPolyA_5->3.fofn\n')
 
@@ -156,7 +156,6 @@ junctions=args.junctions
 Modules=args.Modules
 
 MandoPath = '/'.join(os.path.realpath(__file__).split('/')[:-1]) + '/'
-abpoa=abpoa=MandoPath+'/abPOA-v1.4.1/bin/abpoa'
 
 if '.fofn' in fasta_files:
     fastaList=[]
@@ -252,7 +251,8 @@ if 'P' in Modules:
         print('\tsorting clean psl file')
         os.system('sort -T %s -k 14,14 -k 16,17n %s > %s' %(temp_path,clean_psl_file,clean_sorted_psl_file))
         print('\treading and splitting psl file into loci')
-        os.system('rm -r %s/%s' % (temp_path,'tmp_SS/'))
+        if os.path.isdir(f'{temp_path}tmp_SS/'):
+            os.system('rm -r %s/%s' % (temp_path,'tmp_SS/'))
         os.system('mkdir %s/%s' % (temp_path,'tmp_SS/'))
         SpliceDefineConsensus.get_loci(clean_sorted_psl_file,temp_path+'/tmp_SS',minimum_reads)
     else:
@@ -334,14 +334,17 @@ if 'F' in Modules:
             )
         )
 
-        os.system('sort -T %s -k 14,14 -k 16,17n %s > %s' %(temp_path, temp_path + '/Isoforms.filtered.clean.psl',temp_path + '/Isoforms.sorted.psl'))
-        print('\tgrouping isoforms and assigning them to genes (if annotation is provided)')
+        os.system('sort -T %s -k 9,9 -k 14,14 -k 16,17n %s > %s' %(temp_path, temp_path + '/Isoforms.filtered.clean.psl',temp_path + '/Isoforms.sorted.psl'))
+        os.system('mv %s %s' %(temp_path + '/Isoforms.sorted.psl',temp_path + '/Isoforms.filtered.clean.psl'))
+
+        print('\tgrouping isoforms, assigning them to genes (if annotation is provided), and creating gtf')
         os.system(
-            'python3 %s/groupIsoforms.py -i %s -o %s -g %s'
+            'python3 %s/groupIsoforms.py -i %s -o %s -g %s -t %s'
                   % (MandoPath,
-                     temp_path + '/Isoforms.sorted.psl',
+                     temp_path + '/Isoforms.filtered.clean.psl',
                      temp_path + '/Isoforms.filtered.clean.genes',
-                     genome_annotation
+                     genome_annotation,
+                     temp_path + '/Isoforms.filtered.clean.gtf'
             )
         )
         os.system('scp ' + temp_path + '/Isoforms.filtered.* ' + path)
@@ -356,5 +359,6 @@ if 'Q' in Modules:
         'python3 %s/assignReadsToIsoforms.py -m %s -f %s'
         % (MandoPath,temp_path, fasta_files)
     )
-    os.system('scp ' + temp_path + '/Isoforms.filtered.clean.quant ' + path)
-    os.system('scp ' + temp_path + '/Isoforms.filtered.clean.tpm ' + path)
+    os.system('scp ' + temp_path + '/*.quant ' + path)
+    os.system('scp ' + temp_path + '/*.rpm ' + path)
+    os.system('scp ' + temp_path + '/*.frac ' + path)

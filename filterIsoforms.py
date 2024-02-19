@@ -414,31 +414,6 @@ def readWhiteList(polyA,chromosome):
     return WhiteList
 
 
-def psl_to_gtf(psl_file,gtf_file):
-    '''
-    converts a psl file to a gtf file. It also adjusts the start position by +1 to but leave the end position of features alone. \
-    This way it accomodates format definitions and coordinate systems.
-    '''
-    out=[]
-    doneDict=set()
-    for line in open(psl_file):
-        a = line.strip().split('\t')
-        direction, name, chromosome, start, end=a[8], a[9], a[13], int(a[15]), int(a[16])
-        blocksizes, blockstarts, readstarts = a[18].split(',')[:-1], a[20].split(',')[:-1],a[19].split(',')[:-1]
-        out_tmp=[]
-        out_tmp.append('%s\tMandalorion\ttranscript\t%s\t%s\t.\t%s\t.\ttranscript_id "%s"; gene_id "%s.gene"; gene_name "%s"\n' % (chromosome,int(start)+1,end,direction,name,name,name))
-        for index in np.arange(0,len(blocksizes),1):
-            blockstart=blockstarts[index]
-            blockend=str(int(blockstarts[index])+int(blocksizes[index]))
-            out_tmp.append('%s\tMandalorion\texon\t%s\t%s\t.\t%s\t.\ttranscript_id "%s"; gene_id "%s.gene"; gene_name "%s"\n' % (chromosome,int(blockstart)+1,blockend,direction,name,name,name))
-        out.append(out_tmp)
-    gtf_handle=open(gtf_file,'w')
-    for transcript in out:
-        for feature in transcript:
-            gtf_handle.write(feature)
-    gtf_handle.close()
-
-
 def filter_sam(sam_file,filtered_sam_file):
     out_sam=open(filtered_sam_file,'w')
     for line in open(sam_file):
@@ -488,7 +463,7 @@ def main(infile):
     filter_sam(sam_file,filtered_sam_file)
     os.system('python3 %s -i %s -o %s -t %s' % (emtrey, filtered_sam_file, psl_file,minimap2_threads))
     clean_psl(psl_file, clean_psl_file,False)
-    print('\tcollecting chromosomes')
+    print('\tcollecting chromosomes'+' '*40)
     chromosomes = collect_chromosomes(clean_psl_file)
     numberOfChromosomes=str(len(chromosomes))
     currentChromosome=0
@@ -510,7 +485,6 @@ def main(infile):
 #    print('converting psl output to gtf output')
     out2.close()
     out3.close()
-    psl_to_gtf(path + '/Isoforms.filtered.clean.psl',path + '/Isoforms.filtered.clean.gtf')
     print('\n')
 
 main(infile)

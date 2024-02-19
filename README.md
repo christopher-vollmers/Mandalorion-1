@@ -3,7 +3,7 @@
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](http://perso.crans.org/besson/LICENSE.html)
 
 
-v4.3.1 - That's no moon. It's an isoform.
+v4.5 - Somehow Isoform Returned
 
 Takes R2C2/C3POa and/or PacBio/ccs/lima data and defines high confidence isoform consensus sequences and alignments.
 You can mix and match R2C2/PacBio reads and fasta/fastq files (quality scores are ignored).
@@ -33,15 +33,7 @@ python3 Mandalorion/Mando.py -p ./ -g gencodeV29.gtf -G hg38.fasta -f input.5to3
 
 will generate 
 
-Isoforms.filtered.fasta: The consensus sequence of each high-confidence isoform.
-
-Isoforms.filtered.clean.gtf: Alignments of the isoform consensus sequences with small indels removed
-
-Isoforms.filtered.clean.quant: Number of reads from each supplied fasta file associated with each isoform
-
-Isoforms.filtered.clean.tpm: Normalized expression values for each supplied fasta file associated with each isoform
-
-Isoforms.filtered.clean.genes: Isoform groups and gene association
+Isoform sequences (.fasta), models (.gtf,.psl), and quantification, as well as isoform feature (TSS, PolyA, splice junction) quantification (.quant,.rpm)
 
 ## Overview ##
 
@@ -208,13 +200,31 @@ Here is a full list of options that you can use to modify Mandalorion behavior:
 
 ## Outputs ##
 
-I consider the *Isoforms.filtered.fasta* file the main output of the Mandalorion pipeline. It contains the polished sequences of all isoforms Mandalorion considers very high confidence. Mandalorion also creates *Isoforms.filtered.clean.psl* and *Isoforms.filtered.clean.gtf* files which contain minimap2 alignments of those sequences that had small indels removed. These files are easy to upload to the UCSC Genome Browser to inspect. This version of Mandalorion now also generates a *Isoforms.filtered.clean.quant* file which contains the number of R2C2/PacBio reads that associate which each isoform for each given fasta files.
+Isoforms.filtered.fasta: The consensus sequence of each high-confidence isoform.
+
+Isoforms.filtered.clean.gtf: Alignments of the isoform consensus sequences with small indels removed
+
+Isoforms.filtered.clean.quant: Number of reads from each supplied fasta file associated with each isoform
+
+Isoforms.filtered.clean.rpm: Normalized expression values for each supplied fasta file associated with each isoform
+
+Isoforms.filtered.clean.genes: Isoform groups and gene association
+
+TSSs.quant: Number of reads from each supplied fasta file associated with each TSS
+
+TSSs.rpm: Normalized expression values for each supplied fasta file associated with each TSS
+
+PolyAs.quant: Number of reads from each supplied fasta file associated with each PolyA site
+
+PolyAs.rpm: Normalized expression values for each supplied fasta file associated with each PolyA site
+
+Junctions.quant: Number of reads from each supplied fasta file associated with each splice junction
+
+Junctions.rpm: Normalized expression values for each supplied fasta file associated with each splice junction
+
 
 ## Utils ##
 
 These are the scripts used to do haplotype phasing and HLA analysis as well as preparing reads for Mandalorion and parsing output to fit the LRGASP consortium requirements.
+There is also a script to plot a genome browser shot as shown here. 
 
-## Notes ##
-
-- This version (v4.2) should be a bit faster and does less file generation in the background.
-- No uses abpoa instead of pyabpoa which makes it more robust when dealing with longer isoforms.
