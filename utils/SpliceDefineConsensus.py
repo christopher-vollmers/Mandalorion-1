@@ -685,7 +685,8 @@ def characterize_splicing_event(a,names,csDict,junctions):
 
 
 def find_ends(starts, ends, identity, count_dict, upstream_buffer,downstream_buffer,minimum_feature_count):
-    start_peaks, end_peaks, extend = {}, {}, True
+    window_extension_step = 10
+    start_peaks, end_peaks = {}, {}
     if '+' in identity:
         count_dict['+'].add(identity)
     else:
@@ -695,150 +696,100 @@ def find_ends(starts, ends, identity, count_dict, upstream_buffer,downstream_buf
     start_count = {}
     end_count = {}
     for position in starts:
-        if position not in start_count:
-            start_count[position] = 0
-        start_count[position] += 1
+        start_count[position] = start_count.get(position, 0) + 1
 
     for position in ends:
-        if position not in end_count:
-            end_count[position] = 0
-        end_count[position] += 1
+        end_count[position] = end_count.get(position, 0) + 1
 
-    show=False
     for position in sorted(starts):
-        if position - upstream_buffer not in start_peaks:
-            window_count = 0
-            for i in np.arange(0,10):
-                window_position = position + i
-                if window_position in start_count:
-                    window_count += start_count[window_position]
-            if window_count >= minimum_feature_count:
-                original_bin=[]
-                for shift in np.arange(-upstream_buffer, downstream_buffer):
-                    start_peaks[position + shift] = position
-                    original_bin.append(position + shift)
-                if extend:
-                    bins=[]
-                    for i in np.arange(min(original_bin),max(original_bin)):
-                        bin=0
-                        for shift in np.arange(0,10):
-                            if i+shift in start_count:
-                                 bin+=start_count[i+shift]
-                        bins.append(bin)
+        if position - upstream_buffer in start_peaks:
+            continue
+        window_count = sum(start_count.get(position + i, 0) for i in range(window_extension_step))
+        if window_count < minimum_feature_count:
+            continue
+        start_peaks.update({(position + shift): position for shift in range(-upstream_buffer, downstream_buffer)})
 
-                    best_bin=max(bins)
-                    extended=True
-                    adjacent=position - upstream_buffer
-                    while extended:
-                        window_count=0
-                        adjacent_list=[]
-                        for i in np.arange(1,11):
-                            adjacent_pos = adjacent - i
-                            adjacent_list.append(adjacent_pos)
-                            if adjacent_pos in start_count:
-                                window_count += start_count[adjacent_pos]
-                        if best_bin > window_count >= minimum_feature_count:
-                            for element in adjacent_list:
-                                if element not in start_peaks:
-                                    start_peaks[element] = position
-                                    original_bin.append(element)
-                                else:
-                                    extended=False
-                        else:
-                            extended=False
-                        adjacent = adjacent_pos
-                        if extended:
-                            count_dict['start_left'].add(identity)
+        bins = [sum(start_count.get(pos + shift, 0) for shift in range(window_extension_step)) for pos in range(position - upstream_buffer, position + downstream_buffer)]
+        best_bin = max(bins)
 
-                    extended = True
-                    adjacent = position + downstream_buffer - 1
-                    while extended:
-                        window_count=0
-                        adjacent_list=[]
-                        for i in np.arange(1,11):
-                            adjacent_pos = adjacent + i
-                            adjacent_list.append(adjacent_pos)
-                            if adjacent_pos in start_count:
-                                window_count += start_count[adjacent_pos]
-                        if best_bin > window_count >= minimum_feature_count:
-                            for element in adjacent_list:
-                                if element not in start_peaks:
-                                    start_peaks[element] = position
-                                    original_bin.append(element)
-                                else:
-                                     extended=False
-                        else:
-                            extended=False
-                        adjacent = adjacent_pos
-                        if extended:
-                            count_dict['start_right'].add(identity)
+        extended = True
+        adjacent = position - upstream_buffer
+        while extended:
+            window_count = sum(start_count.get(adjacent - i, 0) for i in range(window_extension_step))
+            adjacent_list = adjacent - np.arange(1, window_extension_step + 1)
+            if best_bin > window_count >= minimum_feature_count:
+                for element in adjacent_list:
+                    if element not in start_peaks:
+                        start_peaks[element] = position
+                    else:
+                        extended = False
+            else:
+                extended = False
+            adjacent -= window_extension_step
+            if extended:
+                count_dict['start_left'].add(identity)
+
+        extended = True
+        adjacent = position + downstream_buffer - 1
+        while extended:
+            window_count = sum(start_count.get(adjacent + i, 0) for i in range(window_extension_step))
+            adjacent_list = adjacent + np.arange(1, window_extension_step + 1)
+            if best_bin > window_count >= minimum_feature_count:
+                for element in adjacent_list:
+                    if element not in start_peaks:
+                        start_peaks[element] = position
+                    else:
+                        extended = False
+            else:
+                extended = False
+            adjacent += window_extension_step
+            if extended:
+                count_dict['start_right'].add(identity)
+
     for position in sorted(ends, reverse=True):
-        if position + upstream_buffer -1 not in end_peaks:
-            window_count = 0
-            for i in np.arange(0,10):
-                window_position = position - i
-                if window_position in end_count:
-                    window_count += end_count[window_position]
-            if window_count >= minimum_feature_count:
-                original_bin=[]
-                for shift in np.arange(-downstream_buffer, upstream_buffer):
-                    end_peaks[position + shift] = position
-                    original_bin.append(position + shift)
-                if extend:
-                    bins=[]
-                    for i in np.arange(min(original_bin),max(original_bin)):
-                        bin=0
-                        for shift in np.arange(0,10):
-                            if i+shift in end_count:
-                                 bin+=end_count[i+shift]
-                        bins.append(bin)
+        if position + upstream_buffer - 1 in end_peaks:
+            continue
+        window_count = sum(end_count.get(position - i, 0) for i in range(window_extension_step))
+        if window_count < minimum_feature_count:
+            continue
+        end_peaks.update({(position + shift): position for shift in range(-downstream_buffer, upstream_buffer)})
 
-                    best_bin=max(bins)
-                    extended = True
-                    adjacent = position - downstream_buffer
-                    while extended:
-                        window_count=0
-                        adjacent_list=[]
-                        for i in np.arange(1,11):
-                            adjacent_pos = adjacent - i
-                            adjacent_list.append(adjacent_pos)
-                            if adjacent_pos in end_count:
-                                window_count += end_count[adjacent_pos]
-                        if best_bin > window_count >= minimum_feature_count:
-                            for element in adjacent_list:
-                                if element not in end_peaks:
-                                    end_peaks[element] = position
-                                    original_bin.append(element)
-                                else:
-                                    extended=False
-                        else:
-                            extended=False
-                        adjacent=adjacent_pos
-                        if extended:
-                            count_dict['end_left'].add(identity)
+        bins = [sum(end_count.get(pos + shift, 0) for shift in range(window_extension_step)) for pos in range(position - downstream_buffer, position + upstream_buffer)]
+        best_bin = max(bins)
 
-                    extended=True
-                    adjacent=position + upstream_buffer - 1
-                    while extended:
-                        window_count=0
-                        adjacent_list=[]
-                        for i in np.arange(1,11):
-                            adjacent_pos = adjacent + i
-                            adjacent_list.append(adjacent_pos)
-                            if adjacent_pos in end_count:
-                                window_count += end_count[adjacent_pos]
-                        if best_bin > window_count >= minimum_feature_count:
-                            for element in adjacent_list:
-                                if element not in end_peaks:
-                                    original_bin.append(element)
-                                    end_peaks[element] = position
-                                else:
-                                    extended=False
-                        else:
-                            extended=False
-                        adjacent = adjacent_pos
-                        if extended:
-                            count_dict['end_right'].add(identity)
+        extended = True
+        adjacent = position - downstream_buffer
+        while extended:
+            window_count = sum(end_count.get(adjacent - i, 0) for i in range(window_extension_step))
+            adjacent_list = adjacent - np.arange(1, window_extension_step + 1)
+            if best_bin > window_count >= minimum_feature_count:
+                for element in adjacent_list:
+                    if element not in end_peaks:
+                        end_peaks[element] = position
+                    else:
+                        extended = False
+            else:
+                extended = False
+            adjacent -= window_extension_step
+            if extended:
+                count_dict['end_left'].add(identity)
+
+        extended = True
+        adjacent = position + upstream_buffer - 1
+        while extended:
+            window_count = sum(end_count.get(adjacent + i, 0) for i in range(window_extension_step))
+            adjacent_list = adjacent + np.arange(1, window_extension_step + 1)
+            if best_bin > window_count >= minimum_feature_count:
+                for element in adjacent_list:
+                    if element not in end_peaks:
+                        end_peaks[element] = position
+                    else:
+                        extended=False
+            else:
+                extended=False
+            adjacent += window_extension_step
+            if extended:
+                count_dict['end_right'].add(identity)
 
     return start_peaks, end_peaks, count_dict
 
